@@ -84,10 +84,10 @@ def main():
     model.to(device)
     model.eval()
 
-    # Define the same transformations as validation
+    # Define the same transformations as validation (with 48x48 resolution)
     val_transform = transforms.Compose([
         transforms.ToPILImage(),
-        transforms.Resize((32, 32)),
+        transforms.Resize((48, 48)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.3403, 0.3121, 0.3214], std=[0.2724, 0.2608, 0.2669])
     ])

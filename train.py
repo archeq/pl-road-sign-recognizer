@@ -35,9 +35,9 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    # Data Augmentation & Normalization
+    # Data Augmentation & Normalization (with 48x48 resolution)
     train_transform = transforms.Compose([
-        transforms.Resize((32, 32)),
+        transforms.Resize((48, 48)),
         transforms.RandomRotation(15),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         transforms.ToTensor(),
@@ -45,7 +45,7 @@ def main():
     ])
 
     val_transform = transforms.Compose([
-        transforms.Resize((32, 32)),
+        transforms.Resize((48, 48)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.3403, 0.3121, 0.3214], std=[0.2724, 0.2608, 0.2669])
     ])
