@@ -40,9 +40,10 @@ class STN_CNN(nn.Module):
         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1) # -> 24x24
         self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1) # -> 24x24
         self.pool2 = nn.MaxPool2d(2, 2)                         # -> 12x12
+        self.pool3 = nn.MaxPool2d(2, 2)                         # -> 6x6
 
-        self.fc1 = nn.Linear(64 * 12 * 12, 256) # Adjusted for 48x48 input
-        self.fc2 = nn.Linear(256, num_classes)
+        self.fc1 = nn.Linear(64 * 6 * 6, 64) # Adjusted to hit ~200K params overall
+        self.fc2 = nn.Linear(64, num_classes)
         self.dropout = nn.Dropout(0.5)
 
     def stn(self, x):
@@ -54,16 +55,16 @@ class STN_CNN(nn.Module):
         theta = self.fc_loc(xs)
         theta = theta.view(-1, 2, 3)
 
-        # Create sampling grid and apply transformation
+        # Create affine grid and sample
         grid = F.affine_grid(theta, x.size(), align_corners=False)
         x = F.grid_sample(x, grid, align_corners=False)
         return x
 
     def forward(self, x):
-        # 1. Spatial Transformer Network
+        # Apply STN
         x = self.stn(x)
 
-        # 2. Main CNN Classification
+        # Pass through CNN
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = self.pool1(x)
@@ -71,8 +72,9 @@ class STN_CNN(nn.Module):
         x = F.relu(self.conv3(x))
         x = F.relu(self.conv4(x))
         x = self.pool2(x)
+        x = self.pool3(x)
 
-        x = x.view(-1, 64 * 12 * 12) # Adjusted for 48x48 input
+        x = x.view(-1, 64 * 6 * 6)
 
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
