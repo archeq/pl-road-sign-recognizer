@@ -89,7 +89,15 @@ def main():
 
     # --- Use the calculated weights in the loss function ---
     criterion = nn.CrossEntropyLoss(weight=class_weights)
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    
+    # STN parameters usually need a much smaller learning rate to avoid collapse
+    stn_params = list(model.localization.parameters()) + list(model.fc_loc.parameters())
+    base_params = [p for n, p in model.named_parameters() if 'localization' not in n and 'fc_loc' not in n]
+
+    optimizer = optim.AdamW([
+        {'params': stn_params, 'lr': args.lr * 0.1},  # 10x smaller LR for STN
+        {'params': base_params}
+    ], lr=args.lr, weight_decay=args.weight_decay)
 
     # Training Loop
     for epoch in range(args.epochs):
