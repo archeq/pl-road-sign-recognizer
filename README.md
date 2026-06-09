@@ -16,16 +16,16 @@ The project is developed with several constraints:
 
 ### Dataset
 
-The [German Traffic Sign Recognition Benchmark (GTSRB)](http://benchmark.ini.rub.de/) is used. It contains ~50,000 images across 43 classes of road signs. Data augmentation techniques such as rotations, skews, and brightness adjustments are applied to improve model robustness.
+The [German Traffic Sign Recognition Benchmark (GTSRB)](http://benchmark.ini.rub.de/) is used. It contains ~50,000 images across 43 classes of road signs. Data augmentation techniques such as rotations, skews, and brightness adjustments are applied to improve model robustness. All input images are resized to a 48x48 resolution.
 
 ### Model Architecture
 
 The model consists of a **Spatial Transformer Network (STN)** followed by a **4-layer Convolutional Neural Network (CNN)**.
 
 *   **STN:** Learns an affine transformation (scaling, cropping, rotation) to normalize the input image and focus on the sign. This helps the model become invariant to transformations.
-*   **CNN:** A 4-layer CNN extracts features from the STN-transformed image for classification.
+*   **CNN:** A 4-layer CNN with 3 MaxPool layers extracts features from the STN-transformed image for classification.
 
-The total number of parameters is approximately 200,000.
+The total number of parameters is approximately 240,000.
 
 ### Optimizer
 
@@ -46,12 +46,20 @@ Initial baseline models will be compared against the final STN+CNN architecture.
 
 2.  **Train the model:**
     ```bash
-    python train.py
+    python train.py --epochs 20
     ```
     This will download the dataset, train the model, and save the checkpoint to `model.pt`.
 
-3.  **Run the live demo:**
+3.  **Run the live webcam demo:**
     ```bash
     python demo.py
     ```
-    This will launch a webcam feed. Hold up a road sign to the camera to see the real-time classification and the STN's learned transformation.
+    This will launch a webcam feed.
+
+4.  **Run the sliding window demo on a photo:**
+    ```bash
+    python demo.py --image path/to/image.jpg
+    # or
+    python demo.py --url http://example.com/image.jpg
+    ```
+    This will run sliding-window detection and display the detected signs along with their STN alignments.
