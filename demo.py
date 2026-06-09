@@ -70,82 +70,80 @@ def get_args():
     parser.add_argument("--conf", type=float, default=0.999, help="Confidence threshold for sliding window detection.")
     return parser.parse_args()
 
-def process_batch(model, device, batch_windows, batch_coords, conf_threshold, boxes, confidences, class_ids, stn_visuals):
-    batch_tensor = torch.stack(batch_windows).to(device)
-    with torch.no_grad():
-        outputs = model(batch_tensor)
-        probs = F.softmax(outputs, dim=1)
-        max_probs, preds = torch.max(probs, dim=1)
+def extract_rois_and_predict(model, frame_rgb, device, val_transform, conf_threshold):
+    # Convert RGB to HSV
+    hsv = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2HSV)
+    
+    # Masks for Traffic Sign Colors (Red, Blue, Yellow)
+    mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
+    mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
+    mask_blue = cv2.inRange(hsv, np.array([100, 100, 50]), np.array([130, 255, 255]))
+    mask_yellow = cv2.inRange(hsv, np.array([20, 100, 100]), np.array([30, 255, 255]))
+    
+    mask = mask_red1 | mask_red2 | mask_blue | mask_yellow
+    
+    kernel = np.ones((5,5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    boxes = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area > 400: # Minimum sign area
+            x, y, w, h = cv2.boundingRect(c)
+            # Aspect ratio check
+            aspect_ratio = float(w)/h
+            if 0.5 <= aspect_ratio <= 2.0:
+                boxes.append([x, y, x+w, y+h])
+                
+    if not boxes:
+        return [], [], [], []
         
-        mask = max_probs > conf_threshold
-        if mask.any():
-            passed_indices = torch.nonzero(mask).squeeze(1)
-            # Handle case where passed_indices is 0-d tensor
-            if passed_indices.dim() == 0:
-                passed_indices = passed_indices.unsqueeze(0)
-                
-            stn_out_t = model.stn(batch_tensor[passed_indices])
+    final_boxes, final_confs, final_cids, final_stns = [], [], [], []
+    model.eval()
+    
+    for box in boxes:
+        x1, y1, x2, y2 = box
+        # Add 15% margin to capture edges for the STN
+        margin_x = int((x2 - x1) * 0.15)
+        margin_y = int((y2 - y1) * 0.15)
+        
+        cx1 = max(0, x1 - margin_x)
+        cy1 = max(0, y1 - margin_y)
+        cx2 = min(frame_rgb.shape[1], x2 + margin_x)
+        cy2 = min(frame_rgb.shape[0], y2 + margin_y)
+        
+        roi_rgb = frame_rgb[cy1:cy2, cx1:cx2]
+        if roi_rgb.size == 0: continue
             
-            for i, idx in enumerate(passed_indices.cpu().numpy()):
-                boxes.append(batch_coords[idx])
-                confidences.append(max_probs[idx].item())
-                class_ids.append(preds[idx].item())
+        input_tensor = val_transform(roi_rgb).unsqueeze(0).to(device)
+        with torch.no_grad():
+            output = model(input_tensor)
+            probs = F.softmax(output, dim=1)
+            max_prob, pred = torch.max(probs, dim=1)
+            
+            if max_prob.item() >= conf_threshold:
+                final_boxes.append([cx1, cy1, cx2, cy2])
+                final_confs.append(max_prob.item())
+                final_cids.append(pred.item())
                 
-                vis = stn_out_t[i].permute(1, 2, 0).cpu().numpy()
+                stn_out_t = model.stn(input_tensor)
+                vis = stn_out_t.squeeze(0).permute(1, 2, 0).cpu().numpy()
                 vis = vis * np.array([0.2724, 0.2608, 0.2669]) + np.array([0.3403, 0.3121, 0.3214])
                 vis = np.clip(vis, 0, 1)
                 vis = (vis * 255).astype(np.uint8)
-                stn_visuals.append(vis)
-
-def run_sliding_window(model, frame_rgb, device, val_transform, conf_threshold):
-    height, width = frame_rgb.shape[:2]
-    min_dim = min(height, width)
-    
-    base_sizes = [48, 64, 96, 128, 192, 256, 384, 512, 768]
-    window_sizes = [s for s in base_sizes if s <= min_dim]
-    if not window_sizes:
-        window_sizes = [min_dim]
-
-    boxes = []
-    confidences = []
-    class_ids = []
-    stn_visuals = []
-
-    model.eval()
-    batch_windows = []
-    batch_coords = []
-    
-    for win_size in window_sizes:
-        step_size = max(16, win_size // 4)
-        for y in range(0, height - win_size + 1, step_size):
-            for x in range(0, width - win_size + 1, step_size):
-                window = frame_rgb[y:y+win_size, x:x+win_size]
-                input_tensor = val_transform(window)
-                batch_windows.append(input_tensor)
-                batch_coords.append((x, y, x+win_size, y+win_size))
+                final_stns.append(vis)
                 
-                if len(batch_windows) >= 128:
-                    process_batch(model, device, batch_windows, batch_coords, conf_threshold, boxes, confidences, class_ids, stn_visuals)
-                    batch_windows, batch_coords = [], []
-                    
-    if len(batch_windows) > 0:
-        process_batch(model, device, batch_windows, batch_coords, conf_threshold, boxes, confidences, class_ids, stn_visuals)
-
-    if len(boxes) > 0:
-        boxes = np.array(boxes)
-        confidences = np.array(confidences)
-        
-        # To fix the 'small square' issue, we must favor larger bounding boxes when confidences are very close.
-        # Neural networks output ~1.0 for tiny red crops as well as the full sign. 
-        # We add a small area-based tie-breaker so the full sign (larger area) wins.
-        areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
-        max_area = np.max(areas) if len(areas) > 0 else 1
-        scores = confidences + (areas / max_area) * 0.05
-        
-        keep_idxs = non_max_suppression(boxes, scores, threshold=0.1)
-        return boxes[keep_idxs], confidences[keep_idxs], [class_ids[i] for i in keep_idxs], [stn_visuals[i] for i in keep_idxs]
-    else:
-        return [], [], [], []
+    if final_boxes:
+        keep_idxs = non_max_suppression(np.array(final_boxes), np.array(final_confs), threshold=0.1)
+        return (np.array(final_boxes)[keep_idxs], 
+                np.array(final_confs)[keep_idxs], 
+                [final_cids[i] for i in keep_idxs], 
+                [final_stns[i] for i in keep_idxs])
+    
+    return [], [], [], []
 
 def main():
     args = get_args()
@@ -170,7 +168,7 @@ def main():
     ])
 
     if args.url or args.image:
-        print("Running Sliding-Window Detection on Image...")
+        print("Running ROI Extraction & Detection on Image...")
         if args.url:
             opener = urllib.request.build_opener()
             opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
@@ -187,7 +185,7 @@ def main():
             
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        boxes, confs, cids, stns = run_sliding_window(model, frame_rgb, device, val_transform, args.conf)
+        boxes, confs, cids, stns = extract_rois_and_predict(model, frame_rgb, device, val_transform, args.conf)
         
         if len(boxes) == 1:
             print("Detected 1 sign.")

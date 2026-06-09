@@ -37,10 +37,14 @@ def main():
 
     # Data Augmentation & Normalization (with 48x48 resolution)
     train_transform = transforms.Compose([
-        transforms.Resize((48, 48)),
-        transforms.RandomRotation(15),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.Resize((56, 56)),  # Resize slightly larger
+        transforms.RandomCrop((48, 48)), # Randomly crop back to 48x48 to simulate shifting
+        transforms.RandomPerspective(distortion_scale=0.3, p=0.5), # Simulate camera angles
+        transforms.RandomRotation(20),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2), # Extreme lighting
+        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5)), # Simulate blur
         transforms.ToTensor(),
+        transforms.RandomErasing(p=0.2, scale=(0.02, 0.1)), # Simulate occlusions/watermarks
         transforms.Normalize(mean=[0.3403, 0.3121, 0.3214], std=[0.2724, 0.2608, 0.2669])
     ])
 
