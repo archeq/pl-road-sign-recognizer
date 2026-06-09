@@ -6,7 +6,7 @@ This repository contains a deep learning pipeline designed to recognize road sig
 Our goal is to build a robust road-sign recognizer that works on real-world photos and live webcam feeds. Instead of using large, pre-trained models (like YOLO), we engineered a **custom Convolutional Neural Network (CNN) equipped with a Spatial Transformer Network (STN)**. 
 - **STN**: Automatically learns to crop, rotate, and deskew traffic signs before passing them to the classifier.
 - **CNN**: A lightweight 4-layer convolutional network that handles the 43-class classification.
-- The total parameter count is kept below 240,000, allowing it to train end-to-end on a single GPU in under 2 minutes (and well under an hour on a standard CPU).
+- The total parameter count is kept below 240,000, allowing it to train end-to-end on a single GPU in 20 minutes (and well under an hour on a standard CPU).
 
 ## Dataset
 We utilized the **GTSRB** (German Traffic Sign Recognition Benchmark) dataset, containing 43 classes of traffic signs. To bridge the domain gap between pristine dataset crops and messy real-world webcam feeds, we heavily augmented the training data with:
