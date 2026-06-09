@@ -112,8 +112,8 @@ def test_detect_sign(model_setup, expected_class, url):
     
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     
-    # Run sliding window detection (using a strict confidence threshold to match demo.py)
-    boxes, confs, cids, stns = run_sliding_window(model, frame_rgb, device, val_transform, conf_threshold=0.999)
+    # Run OpenCV ROI extraction and detection
+    boxes, confs, cids, stns = extract_rois_and_predict(model, frame_rgb, device, val_transform, conf_threshold=0.95)
     
     assert len(boxes) > 0, f"No signs detected with high confidence in image: {url}"
     
