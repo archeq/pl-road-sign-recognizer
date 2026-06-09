@@ -107,8 +107,8 @@ def run_sliding_window(model, frame_rgb, device, val_transform, conf_threshold, 
     
     base_sizes = [48, 64, 96, 128, 192, 256, 384, 512, 768]
     window_sizes = [s for s in base_sizes if s <= min_dim]
-    if not window_sizes:
-        window_sizes = [min_dim]
+    if min_dim not in window_sizes:
+        window_sizes.append(min_dim)
 
     boxes = []
     confidences = []
