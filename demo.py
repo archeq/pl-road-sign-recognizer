@@ -51,13 +51,13 @@ def non_max_suppression(boxes, confidences, threshold):
         
         idxs = np.delete(idxs, np.concatenate(([last], np.where(overlap > threshold)[0])))
     
-    # To strictly ensure we only detect the best sign (as requested), 
+    # To strictly ensure we only detect the best sign
     # we can limit the output to the absolute best detection per image.
     # We will return just the top 1 index.
-    if len(pick) > 0:
-        # pick is already sorted by highest confidence (since idxs was sorted ascending, we take from the end)
-        # So pick[0] is the highest confidence.
-        return [pick[0]]
+    # if len(pick) > 0:
+    #     # pick is already sorted by highest confidence (since idxs was sorted ascending, we take from the end)
+    #     # So pick[0] is the highest confidence.
+    #     return [pick[0]]
     return pick
 
 def get_args():
